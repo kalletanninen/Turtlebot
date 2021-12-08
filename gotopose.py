@@ -2,13 +2,10 @@
 #!/usr/bin/env python
 import rospy
 from geometry_msgs.msg import Twist
-from geometry_msgs.msg import Point
-from geometry_msgs.msg import Quaternion
-from nav_msgs.msg import Odometry
 from turtlesim.msg import Pose
 from math import pow, atan2, sqrt
-from tf.transformations import quaternion_from_euler
-from tf.transformations import euler_from_quaternion
+import sys
+
 
 class TurtleBot:
 
@@ -52,10 +49,17 @@ class TurtleBot:
         """See video: https://www.youtube.com/watch?v=Qh15Nol5htM."""
         return atan2(goal_pose.y - self.pose.y, goal_pose.x - self.pose.x)
 
-    def angular_vel(self, goal_pose, constant=2.5):
+    def angular_vel(self, goal_pose, constant=6, target_reached=False):
         """See video: https://www.youtube.com/watch?v=Qh15Nol5htM."""
-        return constant * (self.steering_angle(goal_pose) - self.pose.theta)
+        if not target_reached:
+        	return constant * (self.steering_angle(goal_pose) - self.pose.theta)
+        else:
+        	return constant * self.to_final_angle(goal_pose)
+	
 
+    def to_final_angle(self, goal_pose):
+    	return goal_pose.theta - self.pose.theta
+    
     def move2goal(self):
         """Moves the turtle to the goal."""
         goal_pose = Pose()
@@ -66,6 +70,7 @@ class TurtleBot:
 
         # Please, insert a number slightly greater than 0 (e.g. 0.01).
         distance_tolerance = float(input("Set your tolerance: "))
+        angle_tolerance = distance_tolerance
 
         vel_msg = Twist()
 
@@ -83,6 +88,27 @@ class TurtleBot:
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
             vel_msg.angular.z = self.angular_vel(goal_pose)
+
+            # Publishing our vel_msg
+            self.velocity_publisher.publish(vel_msg)
+
+            # Publish at the desired rate.
+            self.rate.sleep()
+            
+        while abs(self.to_final_angle(goal_pose)) >= angle_tolerance:
+
+            # Porportional controller.
+            # https://en.wikipedia.org/wiki/Proportional_control
+
+            # Linear velocity in the x-axis.
+            vel_msg.linear.x = 0
+            vel_msg.linear.y = 0
+            vel_msg.linear.z = 0
+
+            # Angular velocity in the z-axis.
+            vel_msg.angular.x = 0
+            vel_msg.angular.y = 0
+            vel_msg.angular.z = self.angular_vel(goal_pose, is_in_goal=True)
 
             # Publishing our vel_msg
             self.velocity_publisher.publish(vel_msg)
